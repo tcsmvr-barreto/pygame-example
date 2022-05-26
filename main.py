@@ -4,6 +4,7 @@ from pygame.locals import *
 
 # https://www.youtube.com/watch?v=iik25wqIuFo
 
+# never gonna give you up ""
 
 COLORS = {
 	'black'     : (0, 0, 0), 
@@ -13,10 +14,10 @@ COLORS = {
 	'blue'      : (0, 0, 255),
 	'yellow'    : (255, 255, 0),
 	'orange'    : (255, 128, 0),
-  'lime'      : (0, 255, 0),
-  'purple'    : (128, 0, 255),
-  'cyan'      : (0, 255, 255),
-  'ice'       : (90, 255, 255),
+  	'lime'      : (0, 255, 0),
+  	'purple'    : (128, 0, 255),
+  	'cyan'      : (0, 255, 255),
+  	'ice'       : (90, 255, 255),
 	'light-red' : (255, 90, 90)
 }
 
