@@ -231,13 +231,14 @@ class Pickup(pygame.sprite.Sprite):
       self.kill()
     else:
       self.rect.centerx = self.platform.rect.centerx
-#  /""""""\
-#  |    /""\
-#/"|    \__/
-#| 
+#   /\_/\
+#   \   /
+#____|_|___
+#| |      |
+#\_|      |
+#  \_/""\_/
+
         
-#
-#
 def plat_gen():
   global PLACED_COUNT
   while len(platforms) < 7+PLACED_COUNT:
