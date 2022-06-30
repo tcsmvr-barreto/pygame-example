@@ -257,7 +257,6 @@ class Platform(pygame.sprite.Sprite):
         offset = math.sqrt(max(color) // self.counter)
         self.surf.fill((max(color[0]-offset,0),max(color[1]-offset,0),max(color[2]-offset,0)))
         displaySurface.blit(t,(self.rect.center[0],self.rect.center[1]-6))
-        pygame.
         pygame.mixer.Sound.play(sound_vol_beep)
 
 class Player(pygame.sprite.Sprite):
