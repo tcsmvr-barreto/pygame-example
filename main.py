@@ -1,25 +1,264 @@
-import pygame, time, math
-from random import randint,randrange
-from pygame.locals import *
+from config import *
+from utils import Spritesheet
+from random import choice
 
 # https://www.youtube.com/watch?v=iik25wqIuFo
+class Bomb(pygame.sprite.Sprite):
+  def __init__(self):
+    super().__init__()
+    self.surf = pygame.Surface((10,10))
+    self.surf.fill((0,0,0,0))
+    pygame.draw.circle(self.surf,COLORS['dark-gray'],(5,5),5)
+    pygame.draw.circle(self.surf,COLORS['white'],(5,5),2)
+    self.rect = self.surf.get_rect()
+    self.platform = None
+    self.active = False
+    self.counter = 20
 
-# never gonna give you up ""
+  def move(self):
+    pass
 
-COLORS = {
-	'black'     : (0, 0, 0), 
-	'white'     : (255, 255, 255),
-	'red'       : (255, 0, 0),
-	'green'     : (0, 128, 0),
-	'blue'      : (0, 0, 255),
-	'yellow'    : (255, 255, 0),
-	'orange'    : (255, 128, 0),
-  	'lime'      : (0, 255, 0),
-  	'purple'    : (128, 0, 255),
-  	'cyan'      : (0, 255, 255),
-  	'ice'       : (90, 255, 255),
-	'light-red' : (255, 90, 90)
-}
+  def update(self):
+    global all_sprites
+    if self.active:
+      if self.counter < 1:
+        dx = P1.rect.center[0]-self.rect.center[0]
+        dy = P1.rect.top-self.rect.center[1]
+        dist_player = math.sqrt(dx**2+dy**2)
+        angle = math.acos(dx/dist_player)
+        if dist_player < 30:
+          P1.vel.x += math.cos(angle) * (30 - dist_player)
+          P1.vel.y -= math.sin(angle) * (30 - dist_player)
+        exp = Explosion(self.rect.centerx,self.rect.centery)
+        all_sprites.add(exp)
+        self.kill()
+      else:
+        self.counter -= 1
+    else:
+      hits = pygame.sprite.spritecollideany(self, all_players)
+      if hits:
+        self.active = True
+    if self.platform:
+      self.rect.centerx = self.platform.rect.centerx
+
+
+class FlyingBomb(Bomb):
+  def __init__(self):
+    super().__init__()
+    self.velocity = [0,0]
+    self.direction = randint(0,360)
+    self.speed = randint(5,10)
+    self.active = False
+    self.counter = 600
+  
+  def move(self):
+    if self.active:
+      if randint(1,100) > 99:
+        self.direction = randint(0,360)
+        self.speed = randint(2,5)
+      self.velocity[0] = math.cos(self.direction) * self.speed
+      self.velocity[1] = math.sin(self.direction) * self.speed
+      new_center = (self.rect.center[0]+self.velocity[0],self.rect.center[1]+self.velocity[1])
+      self.rect.center = new_center
+    elif self.rect.bottom > 0:
+      self.active = True
+    
+    if self.rect.right < bumpDist:
+      self.rect.left = WIDTH - bumpDist
+    if self.rect.left > WIDTH - bumpDist:
+      self.rect.right = bumpDist
+    if self.rect.top > HEIGHT:
+      self.rect.bottom = 0
+    if self.rect.bottom < 0:
+      self.rect.top = HEIGHT
+  
+  def update(self):
+    global all_sprites
+    if self.active:
+      if self.counter < 1:
+        dx = P1.rect.center[0]-self.rect.center[0]
+        dy = P1.rect.top-self.rect.center[1]
+        dist_player = math.sqrt(dx**2+dy**2)
+        angle = math.acos(dx/dist_player)
+        if dist_player < 30:
+          P1.vel.x += math.cos(angle) * (30 - dist_player)
+          P1.vel.y -= math.sin(angle) * (30 - dist_player)
+        exp = Explosion(self.rect.centerx,self.rect.centery)
+        all_sprites.add(exp)
+        self.kill()
+      else:
+        self.counter -= 1
+        t = f1.render(str(self.counter//60 + 1),True,COLORS['white'])
+        # t = f1.render(color.__str__(),True,COLORS['white'])
+        displaySurface.blit(t,(self.rect.center[0]-10,self.rect.center[1]-18))
+
+class Explosion(pygame.sprite.Sprite):
+  def __init__(self,x,y):
+    super().__init__()
+    self.sheet = Spritesheet("assets/spritesheets/explosion.png")
+    rects = []
+    for r in range(3):
+      for c in range(3):
+        rect = (130+(c*180)+(c*15),(40+(r*180)+(r*18)),180,180)
+        rects.append(rect)
+    self.frames = self.sheet.images_at(rects,9,-1)
+    self.surf_ = self.frames[0]
+    self.surf = pygame.transform.scale(self.surf_, (30,30))
+    self.rect = self.surf.get_rect()
+    self.rect.center = (x,y)
+    self.timer = 5
+
+  def move(self):
+    pass
+
+  def update(self):
+    if self.timer < 0:
+      current_frame = self.frames.index(self.surf_) + 1
+      x = self.rect.centerx
+      y = self.rect.centery
+      if current_frame < len(self.frames):
+        self.surf_ = self.frames[current_frame]
+        self.surf = pygame.transform.scale(self.surf_,(30,30))
+        self.surf = pygame.transform.rotate(self.surf,choice([0,90,-90,180]))
+        self.rect = self.surf.get_rect()
+        self.rect.center = (x,y)
+        self.timer = 5
+      else:
+        self.kill()
+    else:
+      self.timer -= 1
+    
+
+class Bumper(pygame.sprite.Sprite):
+  def __init__(self,left):
+    super().__init__()
+    self.surf = pygame.Surface((WIDTH/2,HEIGHT))
+    self.surf.fill(COLORS['red'])
+    self.left = left
+    self.bumpDist = BUMPDIST_START
+    if left:
+      self.rect = self.surf.get_rect(topright = (BUMPDIST_START,0))
+    else:
+      self.rect = self.surf.get_rect(topleft = (WIDTH-BUMPDIST_START,0))
+
+  def move(self):
+    pass
+
+  def update(self,score):
+    if type(score) == int and self.bumpDist > 0:
+      self.bumpDist = BUMPDIST_START - score // 3
+    if self.left:
+      self.rect.right = self.bumpDist
+    else:
+      self.rect.left = WIDTH - self.bumpDist
+
+class Pickup(pygame.sprite.Sprite):
+  def __init__(self,type="PLACE"):
+    super().__init__()
+    self.surf = pygame.Surface((5,5))
+    self.type = type
+    if type == "PLACE":
+      self.surf.fill(COLORS["orange"])
+      #not volatile
+    elif type == "SAFE":
+      self.surf.fill(COLORS["cyan"])
+      #volatile
+    self.rect = self.surf.get_rect()
+
+    self.platform = None
+
+  def move(self):
+    pass
+
+  def update(self):
+    global pickup_safe
+    global pickup_place
+    hits = pygame.sprite.spritecollideany(self, all_players)
+    if hits:
+      if self.type == "SAFE":
+        pickup_safe += 1
+      elif self.type == "PLACE":
+        pickup_place += 1
+      self.kill()
+    else:
+      self.rect.centerx = self.platform.rect.centerx
+
+class Platform(pygame.sprite.Sprite):
+  def __init__(self):
+    super().__init__()
+    self.surf = pygame.Surface((randint(50,100),12))
+    self.surf.fill(COLORS['blue'])
+    self.rect = self.surf.get_rect(center = (randint(0, WIDTH),randint(0,HEIGHT-30)))
+
+    self.speed = randint(-1,1)
+    if self.speed == 0:
+      self.moving = False
+    else:
+      self.moving = True
+    self.point = True
+    self.rank = 1
+    self.bounce = False
+    self.ice = False
+    self.vol = False
+    self.safe = False
+    self.place = False
+    if randint(1,100) > 70:
+      if randint(1,100) > 85:
+        self.ice = True
+        self.surf = pygame.Surface((randint(75,150),12))
+        self.surf.fill(COLORS['ice'])
+        self.rect = self.surf.get_rect()
+        self.rank = 3
+      elif randint(1,100) < 11:
+        self.vol = True
+        self.surf.fill(COLORS['purple'])
+        self.rect = self.surf.get_rect()
+        self.rank = 3
+        self.counter = 180
+        self.isCounting = False
+      else:
+        self.bounce = True
+        self.surf.fill(COLORS['lime'])
+        self.rank = 2
+
+  def move(self): # we changed the wrap around to tighten the screen width
+    if self.moving:
+      self.rect.centerx += self.speed
+      if self.rect.left > WIDTH - bumpDist:
+        hits = pygame.sprite.spritecollide(self,all_players,False)
+        if hits:
+          if hits[0].rect.left > WIDTH - bumpDist:
+            offset = hits[0].rect.centerx - self.rect.centerx
+            self.rect.right = bumpDist
+            hits[0].rect.centerx = self.rect.centerx + offset
+        else:
+          self.rect.right = bumpDist
+      if self.rect.right < bumpDist:
+        hits = pygame.sprite.spritecollide(self,all_players,False)
+        self.rect.left = WIDTH - bumpDist
+        if hits:
+          if hits[0].rect.right < bumpDist:
+            offset = hits[0].rect.centerx - self.rect.centerx
+            self.rect.left = WIDTH - bumpDist
+            hits[0].rect.centerx = self.rect.centerx + offset
+
+  def update(self):
+    global PLACED_COUNT
+    if self.vol and self.isCounting:
+      self.counter -= 1
+      if self.counter <= 0:
+        if self.safe:
+          PLACED_COUNT -= 1
+        self.kill()
+      else:
+        t = f1.render(str(self.counter//60 + 1),True,COLORS['light-red'])
+        color = self.surf.get_at((self.rect.width//2,self.rect.height//2))
+        # t = f1.render(color.__str__(),True,COLORS['white'])
+        offset = math.sqrt(max(color) // self.counter)
+        self.surf.fill((max(color[0]-offset,0),max(color[1]-offset,0),max(color[2]-offset,0)))
+        displaySurface.blit(t,(self.rect.center[0],self.rect.center[1]-6))
+        pygame.
+        pygame.mixer.Sound.play(sound_vol_beep)
 
 class Player(pygame.sprite.Sprite):
   def __init__(self):
@@ -103,143 +342,7 @@ class Player(pygame.sprite.Sprite):
       if self.vel.y < -3:
         self.vel.y = -3
 
-class Platform(pygame.sprite.Sprite):
-  def __init__(self):
-    super().__init__()
-    self.surf = pygame.Surface((randint(50,100),12))
-    self.surf.fill(COLORS['blue'])
-    self.rect = self.surf.get_rect(center = (randint(0, WIDTH),randint(0,HEIGHT-30)))
 
-    self.speed = randint(-1,1)
-    if self.speed == 0:
-      self.moving = False
-    else:
-      self.moving = True
-    self.point = True
-    self.rank = 1
-    self.bounce = False
-    self.ice = False
-    self.vol = False
-    self.safe = False
-    self.place = False
-    if randint(1,100) > 70:
-      if randint(1,100) > 85:
-        self.ice = True
-        self.surf = pygame.Surface((randint(75,150),12))
-        self.surf.fill(COLORS['ice'])
-        self.rect = self.surf.get_rect()
-        self.rank = 3
-      elif randint(1,100) < 11:
-        self.vol = True
-        self.surf.fill(COLORS['purple'])
-        self.rect = self.surf.get_rect()
-        self.rank = 3
-        self.counter = 180
-        self.isCounting = False
-      else:
-        self.bounce = True
-        self.surf.fill(COLORS['lime'])
-        self.rank = 2
-
-  def move(self): # we changed the wrap around to tighten the screen width
-    if self.moving:
-      self.rect.centerx += self.speed
-      if self.rect.left > WIDTH - bumpDist:
-        hits = pygame.sprite.spritecollide(self,all_players,False)
-        if hits:
-          if hits[0].rect.left > WIDTH - bumpDist:
-            offset = hits[0].rect.centerx - self.rect.centerx
-            self.rect.right = bumpDist
-            hits[0].rect.centerx = self.rect.centerx + offset
-        else:
-          self.rect.right = bumpDist
-      if self.rect.right < bumpDist:
-        hits = pygame.sprite.spritecollide(self,all_players,False)
-        self.rect.left = WIDTH - bumpDist
-        if hits:
-          if hits[0].rect.right < bumpDist:
-            offset = hits[0].rect.centerx - self.rect.centerx
-            self.rect.left = WIDTH - bumpDist
-            hits[0].rect.centerx = self.rect.centerx + offset
-
-  def update(self):
-    global PLACED_COUNT
-    if self.vol and self.isCounting:
-      self.counter -= 1
-      if self.counter <= 0:
-        if self.safe:
-          PLACED_COUNT -= 1
-        self.kill()
-      else:
-        t = f1.render(str(self.counter//60 + 1),True,COLORS['light-red'])
-        color = self.surf.get_at((self.rect.width//2,self.rect.height//2))
-        # t = f1.render(color.__str__(),True,COLORS['white'])
-        offset = math.sqrt(max(color) // self.counter)
-        self.surf.fill((max(color[0]-offset,0),max(color[1]-offset,0),max(color[2]-offset,0)))
-        displaySurface.blit(t,(self.rect.center[0],self.rect.center[1]-6))
-
-
-class Bumper(pygame.sprite.Sprite):
-  def __init__(self,left):
-    super().__init__()
-    self.surf = pygame.Surface((WIDTH/2,HEIGHT))
-    self.surf.fill(COLORS['red'])
-    self.left = left
-    self.bumpDist = BUMPDIST_START
-    if left:
-      self.rect = self.surf.get_rect(topright = (BUMPDIST_START,0))
-    else:
-      self.rect = self.surf.get_rect(topleft = (WIDTH-BUMPDIST_START,0))
-
-  def move(self):
-    pass
-
-  def update(self,score):
-    if type(score) == int and self.bumpDist > 0:
-      self.bumpDist = BUMPDIST_START - score // 3
-    if self.left:
-      self.rect.right = self.bumpDist
-    else:
-      self.rect.left = WIDTH - self.bumpDist
-
-class Pickup(pygame.sprite.Sprite):
-  def __init__(self,type="PLACE"):
-    super().__init__()
-    self.surf = pygame.Surface((5,5))
-    self.type = type
-    if type == "PLACE":
-      self.surf.fill(COLORS["orange"])
-      #not volatile
-    elif type == "SAFE":
-      self.surf.fill(COLORS["cyan"])
-      #volatile
-    self.rect = self.surf.get_rect()
-
-    self.platform = None
-
-  def move(self):
-    pass
-
-  def update(self):
-    global pickup_safe
-    global pickup_place
-    hits = pygame.sprite.spritecollideany(self, all_players)
-    if hits:
-      if self.type == "SAFE":
-        pickup_safe += 1
-      elif self.type == "PLACE":
-        pickup_place += 1
-      self.kill()
-    else:
-      self.rect.centerx = self.platform.rect.centerx
-#   /\_/\
-#   \   /
-#____|_|___
-#| |      |
-#\_|      |
-#  \_/""\_/
-
-        
 def plat_gen():
   global PLACED_COUNT
   while len(platforms) < 7+PLACED_COUNT:
@@ -252,7 +355,7 @@ def plat_gen():
       p.rect.center = (randrange(0+bumpDist,WIDTH - width - bumpDist),randrange(-70,0))
       C = check(p,platforms)
     platforms.add(p)
-    spawnPickup(p)
+    spawn_platform_attachments(p)
     all_sprites.add(p)
 
 def check(platform,platforms):
@@ -316,24 +419,9 @@ def spawn_place():
     
 
 pygame.init()
-sound_vol_platform = pygame.mixer.Sound("volatile3new.wav")
-vec = pygame.math.Vector2 # basically just (x,y)
+sound_vol_platform = pygame.mixer.Sound("assets/sounds/sound/chicka-chicka.wav")
+sound_vol_beep = pygame.mixer.Sound("assets/sounds/sound/bbeeeppp.wav")
 
-HEIGHT = 450
-WIDTH = 400
-ACC = 0.5 #def = default
-ACC_ICE = 0.75
-acc = ACC
-FRIC = -0.12 #def = default
-FRIC_ICE = -0.03
-fric = FRIC
-FPS = 60
-HWEIIDGTHHT = (WIDTH,HEIGHT)
-BUMPDIST_START = 100
-bumpDist = BUMPDIST_START
-
-pickup_safe = 0
-pickup_place = 0
 #HWEIIDGTHHT[0] , HWEIIDGTHHT[1]
 
 FramePerSec = pygame.time.Clock()
@@ -341,14 +429,7 @@ FramePerSec = pygame.time.Clock()
 displaySurface = pygame.display.set_mode((WIDTH,HEIGHT))
 pygame.display.set_caption("Game")
 
-P1 = None
-PT1 = None
-all_sprites = None
-platforms = None
-pickups = None
-all_players = pygame.sprite.Group()
-all_bumpers = pygame.sprite.Group()
-PLACED_COUNT = 0
+
 
 
 
@@ -359,6 +440,7 @@ def startGame():
   global pickup_place
   global pickup_safe
   global PLACED_COUNT
+  global bombs
   pickup_place = 0
   pickup_safe = 0
   PLACED_COUNT = 0
@@ -390,6 +472,7 @@ def startGame():
   all_bumpers.add(leftBumper)
   all_bumpers.add(rightBumper)
   pickups = pygame.sprite.Group()
+  bombs = pygame.sprite.Group()
 
   for x in range(randint(5,6)):
     C = True
@@ -398,9 +481,29 @@ def startGame():
       p.rect.center = (randrange(0+bumpDist,WIDTH - p.rect.width - bumpDist),randrange(0,HEIGHT))
       C = check(p,platforms)
     platforms.add(p)
-    spawnPickup(p)
+    spawn_platform_attachments(p)
     all_sprites.add(p)
   return P1,PT1,all_sprites,platforms,all_bumpers,pickups
+
+def spawn_platform_attachments(platform):
+  if randint(1,100) > 50:
+    spawnBomb(platform)
+  else:
+    spawnPickup(platform)
+
+def spawnBomb(platform):
+  global bombs
+  if randint(1,100) > 10:
+    if randint(1,100) > 90:
+      bomb = Bomb()
+    else:
+      bomb = FlyingBomb()
+    bomb.platform = platform
+    bomb.rect.center = (platform.rect.x,platform.rect.y - 15)
+    all_sprites.add(bomb)
+    bombs.add(bomb)
+    
+
 
 def spawnPickup(platform):
   global pickups
@@ -498,6 +601,10 @@ while True:
       pick.rect.y += abs(P1.vel.y)
       if pick.rect.top >= HEIGHT:
         pick.kill()
+    for bomb in bombs:
+      bomb.rect.y += abs(P1.vel.y)
+      if bomb.rect.top >= HEIGHT and not isinstance(bomb,FlyingBomb):
+        bomb.kill()
 
     plat_gen()
 
